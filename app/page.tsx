@@ -1,141 +1,179 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useDeferredValue } from 'react';
+import useSWR from 'swr';
+import { fetchVideos } from '@/lib/api';
+import { Video, SortOption } from '@/lib/types';
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
-import VideoCard from '@/components/VideoCard';
+import Filters from '@/components/Filters';
+import VideoGrid from '@/components/VideoGrid';
 import VideoModal from '@/components/VideoModal';
-import { VIDEOS, CATEGORIES } from '@/lib/data';
+import { Sparkles, Youtube, MessageCircle, Mail, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Youtube, MessageCircle, Mail, Github } from 'lucide-react';
-import Link from 'next/link';
 
 export default function Home() {
+  const { data: allVideos, error, isLoading } = useSWR('videos', fetchVideos, {
+    revalidateOnFocus: false,
+    dedupingInterval: 3600000,
+  });
+
   const [searchTerm, setSearchTerm] = useState('');
+  const deferredSearch = useDeferredValue(searchTerm);
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
+  const [sortBy, setSortBy] = useState<SortOption>('newest');
   const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 
-  const filteredVideos = useMemo(() => {
-    return VIDEOS.filter((video) => {
-      const matchesSearch = video.title.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = selectedCategory === 'Tất cả' || video.category === selectedCategory;
-      return matchesSearch && matchesCategory;
+  const categories = useMemo(() => {
+    if (!allVideos) return ['Tất cả'];
+    const cats = new Set(allVideos.map((v) => v.category));
+    return ['Tất cả', ...Array.from(cats).sort()];
+  }, [allVideos]);
+
+  const filteredAndSortedVideos = useMemo(() => {
+    if (!allVideos) return [];
+
+    let result = [...allVideos];
+
+    // Filter
+    if (deferredSearch) {
+      const term = deferredSearch.toLowerCase();
+      result = result.filter(
+        (v) => v.title.toLowerCase().includes(term) || v.description.toLowerCase().includes(term)
+      );
+    }
+
+    if (selectedCategory !== 'Tất cả') {
+      result = result.filter((v) => v.category === selectedCategory);
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      if (sortBy === 'views') return b.view_count - a.view_count;
+      if (sortBy === 'duration') {
+        const getSecs = (d: string) => {
+          const parts = d.split(':').map(Number);
+          if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+          return parts[0] * 60 + parts[1];
+        };
+        return getSecs(b.duration) - getSecs(a.duration);
+      }
+      return a.index - b.index; // Newest first (index 0 is now the newest after reverse)
     });
-  }, [searchTerm, selectedCategory]);
+
+    return result;
+  }, [allVideos, deferredSearch, selectedCategory, sortBy]);
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen bg-zinc-950">
       <Navbar onSearch={setSearchTerm} />
       
       <Hero />
 
-      {/* Filters Section */}
       <section className="max-w-7xl mx-auto px-6 py-12">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-12">
-          <div>
-            <h2 className="text-3xl font-black tracking-tight mb-2 font-display">KHÁM PHÁ</h2>
-            <p className="text-zinc-500 text-sm font-medium uppercase tracking-widest">Lọc theo thể loại yêu thích của bạn</p>
-          </div>
-          
-          <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all ${
-                  selectedCategory === cat
-                    ? 'bg-red-600 text-white shadow-[0_0_20px_rgba(220,38,38,0.3)]'
-                    : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
-        </div>
+        <Filters
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          categories={categories}
+        />
 
-        {/* Video Grid */}
-        <div id="videos" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-          <AnimatePresence mode="popLayout">
-            {filteredVideos.map((video) => (
-              <VideoCard
-                key={video.id}
-                video={video}
-                onClick={setActiveVideoId}
+        <AnimatePresence mode="wait">
+          {isLoading ? (
+            <motion.div
+              key="loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex flex-col items-center justify-center py-32 gap-4"
+            >
+              <Loader2 className="w-10 h-10 text-red-600 animate-spin" />
+              <p className="text-zinc-500 font-bold uppercase tracking-widest text-xs">Đang tải 558+ bộ phim...</p>
+            </motion.div>
+          ) : error ? (
+            <motion.div
+              key="error"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-32 gap-4 text-red-500"
+            >
+              <AlertCircle className="w-12 h-12" />
+              <p className="font-bold">Lỗi tải dữ liệu. Vui lòng thử lại sau.</p>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="grid"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5 }}
+            >
+              <div className="mb-6 flex items-center justify-between">
+                <p className="text-zinc-500 text-[10px] font-black uppercase tracking-[0.2em]">
+                  Kết quả: <span className="text-zinc-100">{filteredAndSortedVideos.length}</span> phim
+                </p>
+              </div>
+              
+              <VideoGrid
+                videos={filteredAndSortedVideos}
+                onVideoClick={setActiveVideoId}
               />
-            ))}
-          </AnimatePresence>
-        </div>
-
-        {filteredVideos.length === 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-center py-24"
-          >
-            <div className="bg-zinc-900/50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Sparkles className="w-10 h-10 text-zinc-700" />
-            </div>
-            <h3 className="text-xl font-bold text-zinc-300 mb-2">Không tìm thấy phim nào</h3>
-            <p className="text-zinc-500">Thử tìm kiếm với từ khóa khác hoặc chọn thể loại khác nhé!</p>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </section>
 
       {/* About Section */}
-      <section id="about" className="bg-zinc-900/30 border-y border-zinc-900 py-24">
+      <section id="about" className="bg-zinc-900/20 border-y border-zinc-900/50 py-24">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <div className="inline-block p-3 rounded-2xl bg-red-600/10 border border-red-600/20 mb-8">
-            <Youtube className="w-8 h-8 text-red-600" />
+          <div className="inline-block p-4 rounded-3xl bg-red-600/10 border border-red-600/20 mb-8">
+            <Youtube className="w-10 h-10 text-red-600" />
           </div>
-          <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-8 font-display">VỀ THẾ VIETSUB</h2>
-          <p className="text-zinc-400 text-lg md:text-xl leading-relaxed mb-12">
-            Kênh chuyên Vietsub <strong>hoạt hình Trung Quốc 2D</strong> dòng Hệ Thống – Tu Tiên – Trọng Sinh – Báo Thù. 
-            Hơn <strong>558 bộ full tập</strong>, cập nhật liên tục mỗi ngày. 
-            Toàn bộ nội dung được phép sử dụng (Fair-use). Liên hệ bản quyền: <strong>theanh96vn@gmail.com</strong>
+          <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-8 font-display uppercase">Thế Vietsub</h2>
+          <p className="text-zinc-400 text-lg md:text-xl leading-relaxed mb-12 font-medium">
+            Nền tảng xem phim <strong>Donghua Vietsub</strong> hàng đầu. 
+            Chuyên dòng Hệ Thống, Tu Tiên, Trọng Sinh với chất lượng cao nhất. 
+            Dữ liệu được cập nhật liên tục từ kho lưu trữ chính thức.
           </p>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <a href="https://www.youtube.com/@thevietsub" target="_blank" className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-red-600/50 transition-colors group">
-              <Youtube className="w-6 h-6 mx-auto mb-3 text-zinc-500 group-hover:text-red-600" />
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500 group-hover:text-white">YouTube</span>
+            <a href="https://www.youtube.com/@thevietsub" target="_blank" className="p-8 rounded-3xl bg-zinc-900/40 border border-zinc-800 hover:border-red-600/50 transition-all group hover:shadow-[0_0_30px_rgba(220,38,38,0.1)]">
+              <Youtube className="w-7 h-7 mx-auto mb-4 text-zinc-500 group-hover:text-red-600 transition-colors" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-white">YouTube</span>
             </a>
-            <a href="https://zalo.me/g/qovdmt067" target="_blank" className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-blue-600/50 transition-colors group">
-              <MessageCircle className="w-6 h-6 mx-auto mb-3 text-zinc-500 group-hover:text-blue-500" />
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500 group-hover:text-white">Zalo Group</span>
+            <a href="https://zalo.me/g/qovdmt067" target="_blank" className="p-8 rounded-3xl bg-zinc-900/40 border border-zinc-800 hover:border-blue-600/50 transition-all group hover:shadow-[0_0_30px_rgba(37,99,235,0.1)]">
+              <MessageCircle className="w-7 h-7 mx-auto mb-4 text-zinc-500 group-hover:text-blue-500 transition-colors" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-white">Zalo Group</span>
             </a>
-            <a href="mailto:theanh96vn@gmail.com" className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800 hover:border-emerald-600/50 transition-colors group">
-              <Mail className="w-6 h-6 mx-auto mb-3 text-zinc-500 group-hover:text-emerald-500" />
-              <span className="text-xs font-bold uppercase tracking-widest text-zinc-500 group-hover:text-white">Email</span>
+            <a href="mailto:theanh96vn@gmail.com" className="p-8 rounded-3xl bg-zinc-900/40 border border-zinc-800 hover:border-emerald-600/50 transition-all group hover:shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+              <Mail className="w-7 h-7 mx-auto mb-4 text-zinc-500 group-hover:text-emerald-500 transition-colors" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 group-hover:text-white">Email</span>
             </a>
-            <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800">
-              <div className="text-2xl font-black text-white mb-1">108K</div>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Subscribers</span>
+            <div className="p-8 rounded-3xl bg-zinc-900/40 border border-zinc-800 flex flex-col justify-center">
+              <div className="text-3xl font-black text-white mb-1">558+</div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-500">Video Full</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="py-12 border-t border-zinc-900 text-center">
+      <footer className="py-16 text-center">
         <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-center gap-2 mb-6">
-            <div className="w-8 h-px bg-zinc-800" />
-            <Sparkles className="w-4 h-4 text-red-600" />
-            <div className="w-8 h-px bg-zinc-800" />
+          <div className="flex items-center justify-center gap-4 mb-8">
+            <div className="w-12 h-px bg-zinc-900" />
+            <Sparkles className="w-5 h-5 text-red-600" />
+            <div className="w-12 h-px bg-zinc-900" />
           </div>
-          <p className="text-zinc-500 text-sm font-medium tracking-wide">
-            © 2026 THẾ VIETSUB • MADE WITH PASSION FOR DONGHUA FANS
+          <p className="text-zinc-600 text-[11px] font-black uppercase tracking-[0.3em]">
+            © 2026 THẾ VIETSUB • HIGH PERFORMANCE DONGHUA PLATFORM
           </p>
-          <div className="mt-4 flex justify-center gap-6 text-zinc-600 text-xs font-bold uppercase tracking-widest">
-            <Link href="#" className="hover:text-white transition">Điều khoản</Link>
-            <Link href="#" className="hover:text-white transition">Bảo mật</Link>
-            <Link href="#" className="hover:text-white transition">Liên hệ</Link>
-          </div>
         </div>
       </footer>
 
       <VideoModal
+        key={activeVideoId}
         videoId={activeVideoId}
         onClose={() => setActiveVideoId(null)}
       />

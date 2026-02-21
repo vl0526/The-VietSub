@@ -1,9 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Search, Menu, X, Bell, Flame } from 'lucide-react';
+import { Search, Menu, X, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
+import Logo from './Logo';
+import Image from 'next/image';
+
+const AVATAR_URL = "https://yt3.googleusercontent.com/SdGSfwXrBU0nHO8b3ZaDNrSZG7s8K1Cr92Rg0mYTiQQIuhaitrnYW1XAz_x4zmZWkolOSpODYg=s160-c-k-c0x00ffffff-no-rj";
 
 export default function Navbar({ onSearch }: { onSearch: (term: string) => void }) {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -32,9 +36,7 @@ export default function Navbar({ onSearch }: { onSearch: (term: string) => void 
     >
       <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="bg-red-600 p-2 rounded-lg group-hover:rotate-12 transition-transform">
-            <Flame className="w-6 h-6 text-white" />
-          </div>
+          <Logo className="w-10 h-10 text-red-600" />
           <h1 className="text-2xl font-black tracking-tighter font-display">
             THẾ <span className="text-red-600">VIETSUB</span>
           </h1>
@@ -59,13 +61,17 @@ export default function Navbar({ onSearch }: { onSearch: (term: string) => void 
             <Link href="#about" className="hover:text-white transition">Về kênh</Link>
           </div>
 
-          <button 
-            onClick={() => window.open('https://www.youtube.com/@thevietsub?sub_confirmation=1', '_blank')}
-            className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-full font-bold text-sm flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
-          >
-            <Bell className="w-4 h-4" />
-            Đăng ký
-          </button>
+          <div className="flex items-center gap-4 ml-4 pl-4 border-l border-zinc-800">
+            <div className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-red-600/30 group-hover:border-red-600 transition-colors">
+              <Image 
+                src={AVATAR_URL}
+                alt="Thế Vietsub Avatar"
+                fill
+                className="object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </div>
         </div>
 
         {/* Mobile Toggle */}

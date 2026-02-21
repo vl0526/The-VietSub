@@ -28,10 +28,24 @@ export default function Hero() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="max-w-3xl"
         >
-          <div className="flex items-center gap-2 mb-6">
-            <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded">Hot nhất tuần</span>
-            <div className="flex items-center gap-1 text-zinc-400 text-xs font-medium">
-              <Eye className="w-3 h-3" /> 108K Subscribers
+          <div className="flex items-center gap-4 mb-8">
+            <div className="relative w-16 h-16 rounded-2xl overflow-hidden border-2 border-red-600 shadow-[0_0_20px_rgba(220,38,38,0.4)]">
+              <Image 
+                src="https://yt3.googleusercontent.com/SdGSfwXrBU0nHO8b3ZaDNrSZG7s8K1Cr92Rg0mYTiQQIuhaitrnYW1XAz_x4zmZWkolOSpODYg=s160-c-k-c0x00ffffff-no-rj"
+                alt="Thế Vietsub Avatar"
+                fill
+                className="object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="bg-red-600 text-white text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded">Chủ kênh</span>
+                <div className="flex items-center gap-1 text-zinc-400 text-xs font-medium">
+                  <Eye className="w-3 h-3" /> 108K Subscribers
+                </div>
+              </div>
+              <h3 className="text-white font-bold text-lg">Thế Vietsub</h3>
             </div>
           </div>
 
