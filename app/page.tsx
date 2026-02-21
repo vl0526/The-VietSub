@@ -16,6 +16,7 @@ export default function Home() {
   const { data: allVideos, error, isLoading } = useSWR('videos', fetchVideos, {
     revalidateOnFocus: false,
     dedupingInterval: 3600000,
+    fallbackData: typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('thevietsub_videos_cache') || 'null') : null,
   });
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -82,7 +83,7 @@ export default function Home() {
         />
 
         <AnimatePresence mode="wait">
-          {isLoading ? (
+          {isLoading && !allVideos ? (
             <motion.div
               key="loading"
               initial={{ opacity: 0 }}
@@ -133,7 +134,7 @@ export default function Home() {
           </div>
           <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-8 font-display uppercase">Thế Vietsub</h2>
           <p className="text-zinc-400 text-lg md:text-xl leading-relaxed mb-12 font-medium">
-            Nền tảng xem phim <strong>Donghua Vietsub</strong> hàng đầu. 
+            Nền tảng xem phim <strong>Hoạt hình Vietsub</strong> hàng đầu. 
             Chuyên dòng Hệ Thống, Tu Tiên, Trọng Sinh với chất lượng cao nhất. 
             Dữ liệu được cập nhật liên tục từ kho lưu trữ chính thức.
           </p>

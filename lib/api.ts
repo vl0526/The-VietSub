@@ -16,75 +16,107 @@ const CATEGORY_KEYWORDS = [
   "Mạt Thế",
 ];
 
+const CACHE_KEY = "thevietsub_videos_cache";
+const CACHE_TIME_KEY = "thevietsub_videos_cache_time";
+const CACHE_DURATION = 3600000; // 1 hour
+
+const FALLBACK_URL = "/videos_fallback.jsonl";
+
 export async function fetchVideos(): Promise<Video[]> {
-  try {
-    const response = await fetch(DATA_URL, {
-      next: { revalidate: 3600 }, // Cache for 1 hour
-    });
-
-    if (!response.ok) throw new Error("Failed to fetch data");
-
-    const text = await response.text();
-    let rawData: any[] = [];
-
-    try {
-      // Try parsing as a single JSON object first (common for channel dumps)
-      const parsed = JSON.parse(text);
-      if (parsed.entries && Array.isArray(parsed.entries)) {
-        rawData = parsed.entries;
-      } else if (Array.isArray(parsed)) {
-        rawData = parsed;
-      } else {
-        rawData = [parsed];
-      }
-    } catch (e) {
-      // Fallback to line-by-line JSONL parsing
-      rawData = text.split("\n").filter(Boolean).map((line) => JSON.parse(line));
-    }
-
-    // Filter out objects that are not videos (e.g., channel info)
-    // Videos in this dataset usually have a duration or view_count
-    const videoEntries = rawData.filter((item) => 
-      item.id && 
-      item.title && 
-      (item.duration !== undefined || item.view_count !== undefined || item._type === 'url') &&
-      item.id !== "UCfrJX6Jb-jvn1sk1eOR7FsQ" // Filter out the channel ID itself
-    );
-
-    // The source JSONL is already sorted Newest First (confirmed by checking video IDs)
-    return videoEntries.map((raw, index) => {
-      // Extract category from title
-      const category = CATEGORY_KEYWORDS.find((kw) => 
-        raw.title.toLowerCase().includes(kw.toLowerCase())
-      ) || "Khác";
-
-      // Format duration (seconds to HH:MM:SS or MM:SS)
-      let durationStr = "00:00";
-      if (raw.duration) {
-        const totalSeconds = Math.floor(raw.duration);
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
-        
-        if (hours > 0) {
-          durationStr = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        } else {
-          durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  // Try to get from localStorage first for instant load
+  if (typeof window !== "undefined") {
+    const cached = localStorage.getItem(CACHE_KEY);
+    const cachedTime = localStorage.getItem(CACHE_TIME_KEY);
+    
+    if (cached && cachedTime) {
+      const isExpired = Date.now() - parseInt(cachedTime) > CACHE_DURATION;
+      if (!isExpired) {
+        try {
+          return JSON.parse(cached);
+        } catch (e) {
+          console.error("Failed to parse cache", e);
         }
       }
+    }
+  }
 
-      return {
-        id: raw.id,
-        title: raw.title,
-        url: raw.url || `https://www.youtube.com/watch?v=${raw.id}`,
-        description: raw.description || "",
-        duration: durationStr,
-        view_count: raw.view_count || 0,
-        category,
-        thumbnail: `https://i.ytimg.com/vi/${raw.id}/maxresdefault.jpg`,
-        index, // Keep original order for "Newest" sort
-      };
-    });
+  const tryFetch = async (url: string) => {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch from ${url}`);
+    return response.text();
+  };
+
+  try {
+    let text: string;
+    try {
+      text = await tryFetch(DATA_URL);
+    } catch (e) {
+      console.warn("Primary URL failed, trying fallback", e);
+      text = await tryFetch(FALLBACK_URL);
+    }
+
+    const lines = text.split("\n").filter(l => l.trim());
+    
+    let videoEntries: any[] = [];
+    
+    // Efficiently parse JSONL or JSON
+    try {
+      if (lines[0].startsWith('{') && !lines[0].includes('"entries":')) {
+        // Likely true JSONL
+        videoEntries = lines.map(line => JSON.parse(line));
+      } else {
+        // Likely a single JSON object with entries array
+        const parsed = JSON.parse(text);
+        videoEntries = parsed.entries || (Array.isArray(parsed) ? parsed : [parsed]);
+      }
+    } catch (e) {
+      console.error("Parsing error, falling back", e);
+      videoEntries = lines.map(line => {
+        try { return JSON.parse(line); } catch { return null; }
+      }).filter(Boolean);
+    }
+
+    const processedVideos = videoEntries
+      .filter((item) => 
+        item && item.id && item.title && 
+        item.id !== "UCfrJX6Jb-jvn1sk1eOR7FsQ"
+      )
+      .map((raw, index) => {
+        const category = CATEGORY_KEYWORDS.find((kw) => 
+          raw.title.toLowerCase().includes(kw.toLowerCase())
+        ) || "Khác";
+
+        let durationStr = "00:00";
+        if (raw.duration) {
+          const totalSeconds = Math.floor(raw.duration);
+          const hours = Math.floor(totalSeconds / 3600);
+          const minutes = Math.floor((totalSeconds % 3600) / 60);
+          const seconds = totalSeconds % 60;
+          durationStr = hours > 0 
+            ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+            : `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        return {
+          id: raw.id,
+          title: raw.title,
+          url: raw.url || `https://www.youtube.com/watch?v=${raw.id}`,
+          description: raw.description || "",
+          duration: durationStr,
+          view_count: raw.view_count || 0,
+          category,
+          thumbnail: `https://i.ytimg.com/vi/${raw.id}/hqdefault.jpg`, // hqdefault is smaller and faster than maxres
+          index,
+        };
+      });
+
+    // Update cache
+    if (typeof window !== "undefined" && processedVideos.length > 0) {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(processedVideos));
+      localStorage.setItem(CACHE_TIME_KEY, Date.now().toString());
+    }
+
+    return processedVideos;
   } catch (error) {
     console.error("Error fetching videos:", error);
     return [];

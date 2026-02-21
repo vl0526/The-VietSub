@@ -34,12 +34,13 @@ export default function VideoModal({ videoId, onClose }: VideoModalProps) {
               <X className="w-6 h-6" />
             </button>
 
-            {/* CHỈ NHÚNG VIDEO - KHÔNG THÊM GÌ HẾT */}
+            {/* NHÚNG CHÍNH THỨC & TOÀN DIỆN - TUÂN THỦ CHÍNH SÁCH YOUTUBE ĐỂ KIẾM TIỀN AN TOÀN */}
             <iframe
-              src={`https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&iv_load_policy=3&cc_load_policy=0`}
-              className="w-full h-full"
+              src={`https://www.youtube.com/embed/${videoId}?rel=0&iv_load_policy=3&cc_load_policy=0&enablejsapi=1&origin=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : '')}&widget_referrer=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}&playsinline=1`}
+              className="w-full h-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
+              title="YouTube video player"
             />
           </motion.div>
         </motion.div>
