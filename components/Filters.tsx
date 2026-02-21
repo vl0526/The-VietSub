@@ -53,7 +53,7 @@ export default function Filters({
                   : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
               }`}
             >
-              {option === 'newest' ? 'Mới nhất' : option === 'views' ? 'Nhiều view' : 'Dài nhất'}
+              {option === 'newest' ? 'Mới nhất' : option === 'views' ? 'Nhiều view' : 'Tập Dài'}
             </button>
           ))}
         </div>
